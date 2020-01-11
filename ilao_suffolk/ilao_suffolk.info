@@ -1,0 +1,6 @@
+name = ILAO Suffolk API Integration
+description = Integrates suffolk for ILAO
+core = 7.x
+package = OTIS
+dependencies[] = litspot
+files[] = ilao_suffolk.ui.inc

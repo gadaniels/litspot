@@ -1,0 +1,72 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: gdaniels
+ * Date: 12/3/19
+ * Time: 8:50 AM
+ */
+
+
+/**
+ * Implements hook_menu().
+ */
+function ilao_suffolk_menu() {
+  $items['ilao_suffolk_post_form'] = array (
+    'title' => t('Classifier Data Sample Form'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('ilao_suffolk_data_sample_form'),
+    'access callback' => TRUE,
+    'file' => 'ilao_suffolk.ui.inc',
+    'file page' => drupal_get_path('module', 'suffolk'),
+  );
+  $items['ilao_suffolk_get'] = array(
+    'title' => 'Get Taxonomy',
+    'page callback' => 'ilao_suffolk_get_page',
+    'access callback' => TRUE,
+  );
+  $items['ilao_suffolk_post'] = array(
+    'title' => 'Post Test',
+    'page callback' => 'ilao_suffolk_post_page',
+    'access callback' => TRUE,
+  );
+  return $items;
+
+}
+
+
+
+
+function ilao_suffolk_get_page() {
+  $y = litspot_api_get_taxonomy();
+  $output = "<ul>";
+
+  foreach ($y->labels as $key=>$value) {
+
+    $output = $output ."<li>" .$value->name ."</li>";
+  }
+  $output = $output .'</ul>';
+  return $output;
+}
+
+function ilao_suffolk_post_page() {
+  $data = $_SESSION['suffolk']['data'];
+  $query = $_SESSION['suffolk']['query'];
+
+
+  $output= "<h3>".$query ."</h3>";
+  $output = $output ."<p>The best matches for <strong>" .$query ."</strong> are:</p><ul>";
+  foreach ($data->labels as $key=>$value) {
+
+    if (isset($value->children)) {
+
+      foreach($value->children as $child=>$c_value) {
+
+        $output = $output ."<li>" .$c_value->name ." with a score of " .$c_value->pred ."</li>";
+      }
+    }
+
+    $output = $output ."<li>" .$value->name ." with a score of " .$value->pred ."</li>";
+  }
+  $output = $output .'</ul>';
+  return $output;
+}

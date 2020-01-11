@@ -1,0 +1,223 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function litspot_menu() {
+
+  $items['litspot_config'] = array(
+    'title' => 'Configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('litspot_config_form'),
+    'access arguments' => array('administer litspot classifier'),
+    'file' => 'litspot.ui.inc',
+    'file page' => drupal_get_path('module', 'litspot'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function litspot_permission() {
+  return array(
+    'administer litspot classifier' => array(
+      'title' => t('Administer LIT Lab Spot classifier'),
+      'description' => t('Users can admin LIT Lab Spot configuration'),
+      'restrict access' => TRUE,
+    ),
+  );
+
+}
+
+/**
+ * Loads the API Key from variables.
+ *
+ * @return null
+ */
+function litspot_api_key_load() {
+  $key = variable_get('litspot_api_key');
+  if (empty($key)) {
+    drupal_set_message(t('You must configure an API key first'));
+  }
+  return $key;
+}
+
+/**
+ * Based on the passed in API function, builds the URL to interact with.
+ *
+ * @param $api_function
+ * @return string
+ */
+function litspot_api_url_load($api_function) {
+  $send_url_base = variable_get('litspot_url');
+  $send_url = $send_url_base . $api_function . '/';
+  return $send_url;
+}
+
+/**
+ * Builds and executed a POST call to the API
+ *
+ * @param $api_method
+ *   The method to use
+ * @param $data
+ *   The data to post
+ * @return mixed
+ */
+function litspot_api_post($api_method, $data) {
+  $send_url = litspot_api_url_load($api_method);
+  $bearer = 'Authorization: Bearer ' . litspot_api_key_load();
+  $headers = array(
+    "Accept: application/json",
+    "Content-Type: application/json",
+    $bearer
+  );
+
+  $post_data = json_encode($data);
+
+  $crl = curl_init();
+  curl_setopt($crl, CURLOPT_URL, $send_url);
+  curl_setopt($crl, CURLOPT_POST, 1);
+  curl_setopt($crl, CURLOPT_POSTFIELDS, $post_data);
+  curl_setopt($crl, CURLOPT_RETURNTRANSFER, TRUE);
+  curl_setopt($crl, CURLOPT_TIMEOUT, 300);
+  curl_setopt($crl, CURLOPT_HTTPHEADER, $headers);
+  $result = curl_exec($crl);
+
+
+  $jsonArrayResponse = json_decode($result, FALSE);
+
+  return $jsonArrayResponse;
+
+}
+
+/**
+ * Executes the call to get nested entities for a text string.
+ *
+ * @param $text
+ *   The text to send to the LIT Spot classifier
+ *
+ * @return mixed
+ *   The resulting array.
+ */
+function litspot_api_entities_nested($text) {
+  $post_data = array(
+    "text" => $text,
+    "save-text" => intval(variable_get('litspot_save_text', 1)),
+    "cutoff-lower" => floatval(variable_get('litspot_cutoff_lower', 0)),
+    "cutoff-pred" => floatval(variable_get('litspot_cutoff_pred', .5)),
+    "cutoff-upper" => floatval(variable_get('litspot_cutoff_upper', .5))
+  );
+  // $post_data = json_encode($post_data);
+  $api_result = litspot_api_post('entities-nested', $post_data);
+  $query = litspot_entities_get_query_id($api_result);
+  return $api_result;
+
+}
+
+/**
+ * Executed the call to get terminal entites for a text string.
+ *
+ * @param $text
+ *   The text to send to the LIT Spot classifier
+ *
+ * @return mixed
+ *   The resulting array.
+ */
+function litspot_api_entities_terminal($text) {
+  $post_data = array(
+    "text" => $text,
+    "save-text" => intval(variable_get('litspot_save_text', 1)),
+    "cutoff-lower" => floatval(variable_get('litspot_cutoff_lower', 0)),
+    "cutoff-pred" => floatval(variable_get('litspot_cutoff_pred', .5)),
+    "cutoff-upper" => floatval(variable_get('litspot_cutoff_upper', .5))
+  );
+
+  $api_result = litspot_api_post('entities-terminal', $post_data);
+  return $api_result;
+
+}
+
+/**
+ * From an API result, returns the query id.
+ *
+ * @param $api_result
+ *   API result object
+ * @return null|string
+ */
+function litspot_entities_get_query_id($api_result) {
+  if (isset($api_result->{'query-id'})) {
+    return $api_result->{'query-id'};
+  }
+  return t('Query ID not found');
+}
+
+/**
+ * Gets the Spot taxonomy.
+ *
+ * @return mixed
+ */
+function litspot_api_get_taxonomy() {
+  $send_url = litspot_api_url_load('taxonomy');
+  $crl = curl_init();
+  curl_setopt($crl, CURLOPT_URL, $send_url);
+  curl_setopt($crl, CURLOPT_RETURNTRANSFER, TRUE);
+  curl_setopt($crl, CURLOPT_TIMEOUT, 300);
+  curl_setopt($crl, CURLOPT_HEADER, array('Accept: application/json'));
+  curl_setopt($crl, CURLOPT_HEADER, 0);
+  $result = curl_exec($crl);
+  $jsonArrayResponse = json_decode($result, FALSE);
+  $headers = curl_getinfo($crl);
+  return $jsonArrayResponse;
+}
+
+/**
+ * Posts actions to the Spot Action API
+ *
+ * @param $query_id
+ * @param $in_favor
+ * @param $against
+ * @param $clear
+ * @return mixed
+ */
+function litspot_api_post_actions($query_id, $in_favor, $against, $clear) {
+  if (empty($query_id)) {
+    $api_result = t('Error: A valid query ID is required');
+  }
+  else {
+    $post_data = array(
+      "query-id" => $query_id,
+      "in-favor" => $in_favor,
+      'against' => $against,
+      'clear' => $clear,
+    );
+    $api_result = litspot_api_post('actions', $post_data);
+
+  }
+  return $api_result;
+}
+
+/**
+ * Posts opinions to the Spot Opinions API
+ *
+ * @param $query_id
+ * @param $present
+ * @param $not_present
+ * @param $clear
+ * @return mixed
+ */
+function litspot_api_post_opinions($query_id, $present, $not_present, $clear) {
+  if (empty($query_id)) {
+    $api_result = t('Error: A valid query ID is required');
+  }
+  else {
+    $post_data = array(
+      "query-id" => $query_id,
+      "in-favor" => $present,
+      'against' => $not_present,
+      'clear' => $clear,
+    );
+    $api_result = litspot_api_post('opinions', $post_data);
+  }
+  return $api_result;
+}

@@ -1,0 +1,5 @@
+name = LIT SPOT API Integration
+description = Allows for integration with Suffolk Law School's Legal Innovation and Technology's SPOT APIs
+core = 7.x
+package = OTIS
+files[] = litspot.ui.inc
